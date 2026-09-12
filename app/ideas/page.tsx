@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@supabase/supabase-js";
+
+// Inisialisasi Supabase Client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface Idea {
   id: string;
@@ -14,7 +19,6 @@ interface Idea {
 }
 
 export default function IdeasPage() {
-  const supabase = createClientComponentClient();
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,7 +42,7 @@ export default function IdeasPage() {
       .order("created_at", { ascending: false });
 
     if (!error && data) {
-      setIdeas(data);
+      setIdeas(data as Idea[]);
     }
     setLoading(false);
   }
