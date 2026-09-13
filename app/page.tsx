@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Users,
   Scissors,
@@ -21,6 +22,7 @@ import {
   Clock,
   Crown,
   ChevronRight,
+  Lightbulb,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -67,7 +69,7 @@ export default function DashboardPage() {
   const [deadline, setDeadline] = useState("");
   const [dp, setDp] = useState("");
 
-  // Cek Status Sesi Login (Hanya izinkan masuk jika sudah login dari /login)
+  // Cek Status Sesi Login
   useEffect(() => {
     const role = localStorage.getItem("ys_user_role");
     const name = localStorage.getItem("ys_user_name");
@@ -131,7 +133,6 @@ export default function DashboardPage() {
         alert("Gagal membuat folder: " + error.message);
       } else {
         alert(`Folder "${folderName}" berhasil dibuat!`);
-        // Reset Form
         setFolderName("");
         setPic("");
         setPhone("");
@@ -193,8 +194,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* PROFIL PENGGUNA TERHUBUNG & TOMBOL LOGOUT */}
-        <div className="flex items-center gap-4">
+        {/* PROFIL PENGGUNA, TOMBOL IDEA VAULT & TOMBOL LOGOUT */}
+        <div className="flex items-center gap-3">
+          {/* Tombol Idea Vault Baru */}
+          <Link
+            href="/ideas"
+            className="flex items-center gap-1.5 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl text-xs font-bold transition shadow-sm"
+          >
+            <Lightbulb className="w-4 h-4 text-amber-400 fill-amber-400/20" />
+            <span className="hidden sm:inline">Idea Vault</span>
+          </Link>
+
+          {/* Profil Akun */}
           <div className="bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl flex items-center gap-2">
             <Crown className="w-4 h-4 text-amber-400" />
             <div className="text-right">
@@ -207,13 +218,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <button
-            suppressHydrationWarning
-            onClick={handleLogout}
-            title="Keluar Akun"
-            className="p-2 bg-slate-800 hover:bg-red-600/80 text-slate-300 hover:text-white rounded-xl..."
-          ></button>
-
+          {/* Tombol Logout */}
           <button
             onClick={handleLogout}
             title="Keluar Akun"
@@ -225,7 +230,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* BANNER HEADER ESTETIK DASHBOARD */}
+      {/* BANNER HEADER DASHBOARD */}
       <div className="relative w-full h-44 bg-gradient-to-r from-slate-900 via-slate-800 to-amber-950 overflow-hidden rounded-b-2xl shadow-lg border-b border-amber-500/20">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-overlay"
@@ -535,17 +540,40 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* MODUL LAINNYA */}
+        {/* MODUL LAINNYA & IDEA VAULT BANNER */}
         {activeModule === "LAINNYA" && (
-          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-1">
-              Stok Bahan & Pengaturan Toko
-            </h3>
-            <p className="text-xs text-slate-500 mb-6">
-              Pencatatan sisa stok kain, kancing, dan profil usaha YS Tailor.
-            </p>
-            <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-xl text-xs text-slate-400">
-              [Modul Inventaris & Setting Siap Dikonfigurasi]
+          <div className="space-y-6">
+            <div
+              onClick={() => router.push("/ideas")}
+              className="bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 rounded-2xl p-6 shadow-md hover:shadow-lg transition cursor-pointer flex justify-between items-center"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-slate-950/10 rounded-xl text-slate-950">
+                  <Lightbulb className="w-8 h-8" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-base">
+                    Idea Vault & Wishlist
+                  </h4>
+                  <p className="text-xs text-slate-900 font-medium">
+                    Catat ide fitur aplikasi & rencana pengembangan usaha
+                    offline.
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-6 h-6 text-slate-950" />
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+              <h3 className="text-lg font-bold text-slate-800 mb-1">
+                Stok Bahan & Pengaturan Toko
+              </h3>
+              <p className="text-xs text-slate-500 mb-6">
+                Pencatatan sisa stok kain, kancing, dan profil usaha YS Tailor.
+              </p>
+              <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-xl text-xs text-slate-400">
+                [Modul Inventaris & Setting Siap Dikonfigurasi]
+              </div>
             </div>
           </div>
         )}

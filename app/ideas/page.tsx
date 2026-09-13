@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
 // Inisialisasi Supabase Client
@@ -75,8 +76,16 @@ export default function IdeasPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto min-h-screen bg-slate-900 text-white">
-      <h1 className="text-2xl font-bold mb-2 text-amber-400">
+    <div className="p-6 max-w-4xl mx-auto min-h-screen bg-slate-900 text-white font-sans">
+      {/* Tombol Navigasi Kembali */}
+      <Link
+        href="/"
+        className="inline-flex items-center gap-2 text-slate-400 hover:text-amber-400 text-sm mb-6 transition font-medium"
+      >
+        ← Kembali ke Dashboard Utama
+      </Link>
+
+      <h1 className="text-2xl font-bold mb-1 text-amber-400">
         💡 Idea Vault & Wishlist
       </h1>
       <p className="text-slate-400 text-sm mb-6">
