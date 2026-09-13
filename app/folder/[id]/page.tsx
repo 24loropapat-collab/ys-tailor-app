@@ -20,6 +20,7 @@ import {
   Scissors,
   CreditCard,
   Sliders,
+  Banknote,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -37,6 +38,14 @@ export default function DetailFolderPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // State Quick Payment / Tambah DP & Pelunasan
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [selectedPayMember, setSelectedPayMember] = useState<any>(null);
+  const [payAmountInput, setPayAmountInput] = useState("");
+  const [payMethod, setPayMethod] = useState<"CASH" | "TRANSFER">("CASH");
+  const [payNote, setPayNote] = useState("");
+  const [isSubmittingPay, setIsSubmittingPay] = useState(false);
 
   // 1. IDENTITAS CUSTOMER
   const [memberName, setMemberName] = useState("");
@@ -202,6 +211,80 @@ export default function DetailFolderPage() {
     setIsModalOpen(true);
   };
 
+  // HANDLER OPEN MODAL TAMBAH PEMBAYARAN / DP
+  const handleOpenPayModal = (member: any) => {
+    setSelectedPayMember(member);
+    setPayAmountInput("");
+    setPayNote("");
+    setPayMethod("CASH");
+    setIsPayModalOpen(true);
+  };
+
+  // HANDLER SUBMIT PEMBAYARAN / PELUNASAN BARU
+  const handleSubmitPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPayMember) return;
+
+    const addedAmount = parsePriceInput(payAmountInput);
+    if (addedAmount <= 0) {
+      alert("Masukkan nominal pembayaran yang valid!");
+      return;
+    }
+
+    setIsSubmittingPay(true);
+    try {
+      const order = selectedPayMember.order_items?.[0];
+      if (!order) {
+        alert("Data pesanan anggota tidak ditemukan.");
+        return;
+      }
+
+      const currentPrice = Number(order.price) || 0;
+      const currentDp = Number(order.down_payment) || 0;
+      const newTotalDp = currentDp + addedAmount;
+
+      let newStatus = "BELUM_BAYAR";
+      if (newTotalDp >= currentPrice && currentPrice > 0) {
+        newStatus = "LUNAS";
+      } else if (newTotalDp > 0) {
+        newStatus = "DP";
+      }
+
+      // 1. Update order_items di Supabase
+      const { error: ordErr } = await (supabase.from("order_items") as any)
+        .update({
+          down_payment: newTotalDp,
+          payment_status: newStatus,
+        })
+        .eq("id", order.id);
+
+      if (ordErr) throw ordErr;
+
+      // 2. Opsi: Cetak Kwitansi Sobekan Pembayaran
+      if (
+        confirm(
+          `Pembayaran Rp ${addedAmount.toLocaleString(
+            "id-ID",
+          )} berhasil dicatat!\nApakah kamu ingin mencetak Kwitansi Sobekan Nota?`,
+        )
+      ) {
+        handlePrintReceipt(
+          selectedPayMember,
+          addedAmount,
+          newTotalDp,
+          newStatus,
+        );
+      }
+
+      setIsPayModalOpen(false);
+      fetchData();
+    } catch (err: any) {
+      alert("Gagal mencatat pembayaran: " + err.message);
+    } finally {
+      setIsSubmittingPay(false);
+    }
+  };
+
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!memberName) return;
@@ -355,6 +438,71 @@ export default function DetailFolderPage() {
     }
   };
 
+  // CETAK KWITANSI PEMBAYARAN
+  const handlePrintReceipt = (
+    member: any,
+    addedAmount: number,
+    newTotalDp: number,
+    status: string,
+  ) => {
+    const order = member.order_items?.[0] || {};
+    const totalPrice = Number(order.price) || 0;
+    const sisa = totalPrice - newTotalDp;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>KWITANSI PEMBAYARAN - ${member.member_name}</title>
+          <style>
+            body { font-family: monospace, sans-serif; padding: 15px; color: #000; width: 80mm; margin: 0 auto; }
+            .ticket { border: 2px dashed #000; padding: 10px; }
+            .title { text-align: center; font-weight: bold; font-size: 14px; text-transform: uppercase; border-bottom: 2px solid #000; pb: 4px; mb: 6px; }
+            .info { font-size: 11px; margin-bottom: 8px; border-bottom: 1px solid #000; padding-bottom: 6px; }
+            .info div { margin-bottom: 3px; }
+            .amount-box { background: #eee; border: 1px solid #000; padding: 6px; text-align: center; margin-bottom: 8px; }
+            .amount-box .label { font-size: 10px; font-weight: bold; }
+            .amount-box .val { font-size: 14px; font-weight: bold; }
+            .summary { font-size: 11px; margin-bottom: 8px; }
+            .summary div { display: flex; justify-content: space-between; margin-bottom: 2px; }
+            .footer { font-size: 9px; text-align: center; border-top: 1px solid #000; pt: 4px; margin-top: 6px; }
+          </style>
+        </head>
+        <body>
+          <div class="ticket">
+            <div class="title">YS TAILOR KWITANSI</div>
+            <div class="info">
+              <div><strong>Instansi:</strong> ${folderInfo?.folder_name || "-"}</div>
+              <div><strong>Nama:</strong> ${member.member_name} (${member.rank_title || "-"})</div>
+              <div><strong>Pesanan:</strong> ${order.item_type || "-"}</div>
+              <div><strong>Tanggal:</strong> ${new Date().toLocaleDateString("id-ID")}</div>
+            </div>
+
+            <div class="amount-box">
+              <div class="label">SETORAN HARI INI:</div>
+              <div class="val">Rp ${addedAmount.toLocaleString("id-ID")}</div>
+            </div>
+
+            <div class="summary">
+              <div><span>Total Tagihan:</span> <strong>Rp ${totalPrice.toLocaleString("id-ID")}</strong></div>
+              <div><span>Total Terbayar:</span> <strong>Rp ${newTotalDp.toLocaleString("id-ID")}</strong></div>
+              <div><span>Sisa Pembayaran:</span> <strong>Rp ${sisa > 0 ? sisa.toLocaleString("id-ID") : 0}</strong></div>
+              <div><span>Status:</span> <strong>${status}</strong></div>
+            </div>
+
+            <div class="footer">
+              Terima kasih atas kepercayaan Anda!<br/>YS TAILOR • DEMAK
+            </div>
+          </div>
+          <script>window.onload = function() { window.print(); }</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const handlePrintMember = (
     member: any,
     printTarget: "ATASAN" | "BAWAHAN" | "KEDUA",
@@ -467,7 +615,7 @@ export default function DetailFolderPage() {
     printWindow.document.write(`
       <html>
         <head>
-          <title>STRUK UKURAN & PRODUKSI - ${member.member_name}</title>
+          <title>STRUK PRODUKSI - ${member.member_name}</title>
           <style>
             body { font-family: monospace, sans-serif; padding: 15px; color: #000; width: 85mm; margin: 0 auto; }
             .section { border: 2px solid #000; padding: 8px; margin-bottom: 12px; }
@@ -583,7 +731,6 @@ export default function DetailFolderPage() {
               const isLunas =
                 order.payment_status === "LUNAS" || (sisa <= 0 && priceNum > 0);
               const fit = order.fit_type || "B";
-
               const size = member.sizes || {};
 
               return (
@@ -657,21 +804,21 @@ export default function DetailFolderPage() {
                         </button>
                       </div>
 
+                      {/* INDIKATOR STATUS & TOMBOL BAYAR / TAMBAH DP */}
                       {isLunas ? (
                         <span className="flex items-center gap-1.5 text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-full font-extrabold">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400" />{" "}
                           LUNAS
                         </span>
-                      ) : dpNum > 0 ? (
-                        <span className="flex items-center gap-1.5 text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-full font-extrabold">
-                          <AlertCircle className="w-4 h-4 text-amber-400" /> DP:
-                          Rp {dpNum.toLocaleString("id-ID")}
-                        </span>
                       ) : (
-                        <span className="flex items-center gap-1.5 text-xs bg-rose-500/20 text-rose-300 border border-rose-500/40 px-3 py-1 rounded-full font-extrabold">
-                          <XCircle className="w-4 h-4 text-rose-400" /> BELUM
-                          BAYAR
-                        </span>
+                        <button
+                          onClick={() => handleOpenPayModal(member)}
+                          className="flex items-center gap-1.5 text-xs bg-amber-500 hover:bg-amber-600 text-slate-950 px-3 py-1.5 rounded-xl font-extrabold shadow-md transition"
+                          title="Tambah DP atau Pelunasan"
+                        >
+                          <Banknote className="w-4 h-4" />
+                          <span>+ Bayar / DP</span>
+                        </button>
                       )}
 
                       <button
@@ -712,12 +859,28 @@ export default function DetailFolderPage() {
                             {order.fabric_type || "-"}
                           </strong>
                         </div>
-                        <p className="text-slate-300 font-semibold pt-1">
-                          Harga:{" "}
-                          <strong className="text-emerald-400 font-mono">
-                            Rp {priceNum.toLocaleString("id-ID")}
-                          </strong>
-                        </p>
+                        <div className="pt-2 border-t border-slate-800 space-y-1">
+                          <p className="text-slate-300 font-semibold">
+                            Harga Total:{" "}
+                            <strong className="text-emerald-400 font-mono">
+                              Rp {priceNum.toLocaleString("id-ID")}
+                            </strong>
+                          </p>
+                          <p className="text-slate-300 font-semibold">
+                            Total Masuk:{" "}
+                            <strong className="text-amber-400 font-mono">
+                              Rp {dpNum.toLocaleString("id-ID")}
+                            </strong>
+                          </p>
+                          {!isLunas && (
+                            <p className="text-slate-300 font-semibold">
+                              Sisa Tagihan:{" "}
+                              <strong className="text-rose-400 font-mono">
+                                Rp {sisa.toLocaleString("id-ID")}
+                              </strong>
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -850,7 +1013,130 @@ export default function DetailFolderPage() {
         </div>
       </div>
 
-      {/* MODAL FORM INPUT BERSIH */}
+      {/* MODAL QUICK PAYMENT / TAMBAH DP & PELUNASAN */}
+      {isPayModalOpen && selectedPayMember && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-amber-500/30 text-slate-100 p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+              <div>
+                <h3 className="font-extrabold text-amber-400 text-base">
+                  💵 Catat Pembayaran / Pelunasan
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Anggota: {selectedPayMember.member_name}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsPayModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitPayment} className="space-y-4 text-xs">
+              <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Total Tagihan:</span>
+                  <strong className="text-emerald-400 font-mono">
+                    Rp{" "}
+                    {Number(
+                      selectedPayMember.order_items?.[0]?.price || 0,
+                    ).toLocaleString("id-ID")}
+                  </strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Sudah Dibayar:</span>
+                  <strong className="text-amber-400 font-mono">
+                    Rp{" "}
+                    {Number(
+                      selectedPayMember.order_items?.[0]?.down_payment || 0,
+                    ).toLocaleString("id-ID")}
+                  </strong>
+                </div>
+                <div className="flex justify-between border-t border-slate-700 pt-1">
+                  <span className="text-slate-300 font-bold">
+                    Sisa Tagihan:
+                  </span>
+                  <strong className="text-rose-400 font-mono font-bold">
+                    Rp{" "}
+                    {(
+                      Number(selectedPayMember.order_items?.[0]?.price || 0) -
+                      Number(
+                        selectedPayMember.order_items?.[0]?.down_payment || 0,
+                      )
+                    ).toLocaleString("id-ID")}
+                  </strong>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">
+                  Nominal Pembayaran Masuk (Rp) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={payAmountInput}
+                  onChange={(e) => setPayAmountInput(e.target.value)}
+                  placeholder="Contoh: 100000"
+                  className="w-full p-2.5 border border-amber-500/50 rounded-xl bg-slate-950 font-extrabold text-amber-400 text-sm outline-none focus:border-amber-500 font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">
+                    Metode Pembayaran
+                  </label>
+                  <select
+                    value={payMethod}
+                    onChange={(e) => setPayMethod(e.target.value as any)}
+                    className="w-full p-2 border border-slate-700 rounded-lg bg-slate-950 text-white font-medium"
+                  >
+                    <option value="CASH">💵 Tunai / Cash</option>
+                    <option value="TRANSFER">💳 Transfer Bank</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">
+                    Catatan (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={payNote}
+                    onChange={(e) => setPayNote(e.target.value)}
+                    placeholder="Ket DP ke-2, dll."
+                    className="w-full p-2 border border-slate-700 rounded-lg bg-slate-950 text-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-700 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPayModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-xl hover:bg-slate-700"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPay}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl shadow transition flex items-center gap-2"
+                >
+                  {isSubmittingPay && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  Simpan Pembayaran
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FORM INPUT ANGCOTA / PESANAN */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 rounded-2xl max-w-3xl w-full my-8 overflow-hidden shadow-2xl border border-slate-700 text-slate-100 max-h-[90vh] flex flex-col">
